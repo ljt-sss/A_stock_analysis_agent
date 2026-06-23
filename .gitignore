@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.codex/
+.agents/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+node_modules/
+dist/
+.idea/
+.vscode/
+postgres_data/
+*.log
