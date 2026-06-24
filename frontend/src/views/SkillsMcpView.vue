@@ -1,22 +1,27 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, Quote, RotateCcw, Search, Target, Wrench } from 'lucide-vue-next'
+import { Activity, BookOpenCheck, Brain, DatabaseZap, Wrench } from 'lucide-vue-next'
 import KpiCard from '../components/common/KpiCard.vue'
 import BaseChart from '../components/charts/BaseChart.vue'
 import StatusBadge from '../components/common/StatusBadge.vue'
 import { evalApi } from '../api/eval'
+import { wikiApi } from '../api/wiki'
 
 const metrics = ref<any>(null)
 const skills = ref<any[]>([])
 const tools = ref<any[]>([])
 const calls = ref<any[]>([])
+const wikiPages = ref<any[]>([])
+const memories = ref<any[]>([])
 
 onMounted(async () => {
-  ;[metrics.value, skills.value, tools.value, calls.value] = await Promise.all([
+  ;[metrics.value, skills.value, tools.value, calls.value, wikiPages.value, memories.value] = await Promise.all([
     evalApi.metrics(),
     evalApi.skills(),
     evalApi.tools(),
     evalApi.calls(),
+    wikiApi.pages(),
+    wikiApi.memories(''),
   ])
 })
 
@@ -44,42 +49,78 @@ const option = computed(() => ({
 <template>
   <div v-if="metrics">
     <div class="kpi-grid six grid">
-      <KpiCard label="数据准确率" :value="metrics.data_accuracy + '%'" change="较上周 +2.31pp" tone="blue" :icon="Target" />
-      <KpiCard label="检索命中率" :value="metrics.retrieval_hit_rate + '%'" change="较上周 +1.87pp" tone="green" :icon="Search" />
-      <KpiCard label="引用覆盖率" :value="metrics.citation_coverage + '%'" change="较上周 +2.06pp" tone="purple" :icon="Quote" />
-      <KpiCard label="工具成功率" :value="metrics.tool_success_rate + '%'" change="较上周 +3.41pp" tone="orange" :icon="Wrench" />
-      <KpiCard label="幻觉率" :value="metrics.hallucination_rate + '%'" change="较上周 -0.64pp" tone="red" :icon="AlertTriangle" />
-      <KpiCard label="任务恢复率" :value="metrics.task_recovery_rate + '%'" change="较上周 +1.23pp" tone="green" :icon="RotateCcw" />
+      <KpiCard label="wiki 页面" :value="String(wikiPages.length)" change="AI 报告归档" tone="blue" :icon="BookOpenCheck" />
+      <KpiCard label="记忆条目" :value="String(memories.length)" change="长期复盘素材" tone="green" :icon="Brain" />
+      <KpiCard label="Skills" :value="String(skills.length)" change="可复用分析能力" tone="purple" :icon="Activity" />
+      <KpiCard label="MCP 服务" :value="String(tools.length)" change="数据与工具接口" tone="orange" :icon="DatabaseZap" />
+      <KpiCard label="工具成功率" :value="metrics.tool_success_rate + '%'" change="近30天" tone="green" :icon="Wrench" />
+      <KpiCard label="引用覆盖率" :value="metrics.citation_coverage + '%'" change="报告可核验" tone="blue" :icon="BookOpenCheck" />
     </div>
-    <div class="chart-grid" style="grid-template-columns: 1.05fr 1fr 1fr">
+
+    <div class="chart-grid ops-grid">
       <article class="panel chart-panel">
         <div class="panel-title"><h2>评估趋势（近30天）</h2></div>
         <div class="panel-body"><BaseChart :option="option" :height="270" /></div>
       </article>
+
       <article class="panel">
-        <div class="panel-title"><h2>技能（Skills）运行状态</h2></div>
-        <div class="table-wrap"><table><thead><tr><th>技能名称</th><th>成功率</th><th>平均耗时</th><th>状态</th></tr></thead><tbody>
-          <tr v-for="item in skills.slice(0, 7)" :key="item.name"><td><b>{{ item.title }}</b></td><td>{{ item.success_rate }}%</td><td>{{ (item.avg_latency_ms / 1000).toFixed(2) }}s</td><td><StatusBadge text="通过" tone="success" /></td></tr>
-        </tbody></table></div>
+        <div class="panel-title"><h2>Skills 使用状态</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>技能</th><th>成功率</th><th>平均耗时</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr v-for="item in skills.slice(0, 8)" :key="item.name">
+                <td><b>{{ item.title }}</b><br><small class="muted">{{ item.name }}</small></td>
+                <td>{{ item.success_rate }}%</td>
+                <td>{{ (item.avg_latency_ms / 1000).toFixed(2) }}s</td>
+                <td><StatusBadge text="可用" tone="success" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </article>
+
       <article class="panel">
-        <div class="panel-title"><h2>MCP 工具（服务）</h2></div>
-        <div v-for="item in tools" :key="item.name" style="padding:14px;border-bottom:1px solid var(--color-border)">
-          <div style="display:flex;justify-content:space-between"><b>{{ item.name }}</b><StatusBadge text="在线" tone="success" /></div>
+        <div class="panel-title"><h2>MCP 服务</h2></div>
+        <div v-for="item in tools" :key="item.name" class="tool-row">
+          <div><b>{{ item.name }}</b><StatusBadge text="在线" tone="success" /></div>
           <p class="muted">{{ item.tools.length }} 个工具 · 平均延迟 {{ item.avg_latency_ms }}ms</p>
           <div class="progress"><i :style="{ width: item.success_rate + '%' }"></i></div>
         </div>
       </article>
     </div>
+
     <div class="split-main" style="margin-top:14px">
       <article class="panel">
-        <div class="panel-title"><h2>任务执行 / 工具调用日志</h2></div>
-        <div class="table-wrap"><table><thead><tr><th>时间</th><th>工具 / 技能</th><th>类型</th><th>耗时</th><th>状态</th></tr></thead><tbody>
-          <tr v-for="item in calls" :key="item.tool_name + item.created_at"><td>{{ item.created_at?.slice(11, 19) }}</td><td><b>{{ item.tool_name }}</b></td><td>{{ item.tool_type }}</td><td>{{ item.latency_ms }}ms</td><td><StatusBadge :text="item.status" tone="success" /></td></tr>
-        </tbody></table></div>
+        <div class="panel-title"><h2>最近工具调用日志</h2></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>时间</th><th>工具 / 技能</th><th>类型</th><th>耗时</th><th>状态</th></tr></thead>
+            <tbody>
+              <tr v-for="item in calls" :key="item.tool_name + item.created_at">
+                <td>{{ item.created_at?.replace('T', ' ').slice(5, 19) }}</td>
+                <td><b>{{ item.tool_name }}</b></td>
+                <td>{{ item.tool_type }}</td>
+                <td>{{ item.latency_ms }}ms</td>
+                <td><StatusBadge :text="item.status" :tone="item.status === 'success' ? 'success' : 'danger'" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </article>
-      <aside class="panel"><div class="panel-title"><h2>下一步行动建议</h2></div><ul class="timeline"><li>优化风险红旗分析的规则与特征库</li><li>加强检索召回策略，提升引用覆盖率</li><li>补充财报口径映射，减少数据期间问题</li></ul></aside>
+
+      <aside class="panel">
+        <div class="panel-title"><h2>wiki 知识库</h2></div>
+        <div class="panel-body archive-list">
+          <div v-for="page in wikiPages.slice(0, 6)" :key="page.id">
+            <b>{{ page.title }}</b>
+            <span>{{ page.ts_code || page.page_type }} · v{{ page.version }}</span>
+            <p>{{ page.content_md?.slice(0, 90) }}</p>
+          </div>
+          <p v-if="!wikiPages.length" class="muted">生成 AI 报告后，这里会出现对应股票的 wiki 页面。</p>
+        </div>
+      </aside>
     </div>
   </div>
-  <div v-else class="empty">正在加载 Skills / MCP 指标...</div>
+  <div v-else class="empty">正在加载工具与知识库指标...</div>
 </template>

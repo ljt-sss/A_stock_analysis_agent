@@ -1,144 +1,249 @@
-# A 股个人股票研究 Agent 平台
+# A 股研究 Agent 平台
 
-> 围绕公开财报、公告、新闻与个人研究记录，构建一个可沉淀、可复盘、可自我升级的股票研究 Agent 平台。项目重点不是“做一个行情页面”，而是把个人投资研究流程产品化：让 Agent 能查数据、读证据、调用工具、生成报告、写回 Wiki，并通过评估体系不断优化自己的分析链路。
+面向个人股票研究与复盘的 Agent 系统。项目围绕公开财报、公告、新闻、行情数据和个人研究笔记，构建 Wiki 知识库、多 Agent 编排、Skills/MCP 工具调用、长期记忆和评估回归机制，用于持续跟踪公司基本面、记录研究结论变化，并把每次分析沉淀回知识库。
 
-[GitHub 项目地址](https://github.com/ljt-sss/A_stock_analysis_agent.git)
+项目地址：[https://github.com/ljt-sss/A_stock_analysis_agent](https://github.com/ljt-sss/A_stock_analysis_agent)
 
-## 项目定位
+> 本项目用于学习、研究和个人复盘，不构成投资建议。财务和行情数据可能存在延迟、缺失或口径差异，最终应以上市公司公告、交易所披露和权威数据源为准。
 
-这是一个面向中国 A 股基本面研究的 Agent 系统，目标是辅助个人完成公司基本面分析、交易复盘、研究笔记沉淀与长期跟踪。
+## 项目重点
 
-平台将公开财报、公告、新闻、行情指标、研究笔记统一组织为 Wiki 知识库，并通过主控 Agent 编排多个专业子 Agent / Skills / MCP 工具完成研究任务。每次分析结束后，系统会把关键事件、财务信息、风险清单、结论变化写回 Wiki，逐步形成“越用越懂我的研究系统”。
+这个项目的核心不是前端页面，也不是简单调用大模型生成一段分析文本，而是把股票研究流程拆成可执行、可观测、可迭代的 Agent 工作流：
 
-> 免责声明：本项目仅用于学习、研究与个人复盘，不构成任何投资建议。公开数据可能存在延迟、缺失或口径差异，请以上市公司公告、交易所披露和权威数据源为准。
+- Agent 负责拆解研究任务、选择工具、管理状态、生成带证据的结论；
+- Skills/MCP 负责连接财报、行情、新闻、Wiki、财务计算等工具能力；
+- Wiki 知识库负责沉淀公司、行业、指标、研究笔记和历史结论；
+- 监测模块负责记录工具调用链路、成功率、耗时、失败原因和证据覆盖情况；
+- Eval 模块负责把失败任务转成回归用例，推动检索、规则和编排流程持续优化。
 
 ## 简历项目描述
 
 个人股票研究 Agent 平台：围绕公开财报、公告、新闻及个人研究记录，构建包含 Wiki 知识库、多 Agent 协作、Skills/MCP 工具调用及长期记忆机制的平台，用于复盘个人股票操作与公司基本面分析。
 
-核心职责：
+职责拆解：
 
-- Wiki 知识库自我升级：构建公司、行业、指标及研究笔记知识库，将财报摘要、市值波动、财务状态与分析框架沉淀为 Markdown 知识库；Agent 完成分析后，自动将关键事件、财务信息、风险清单与结论变化写回 Wiki，实现知识库持续更新与自我升级。
-- Agent 编排与 Skills/MCP 反馈优化：设计主控 + 多子 Agent 协作架构，将研究拆解为数据检查、财务计算、估值分析等节点；通过任务状态表记录调用链路，统计 Skills/MCP 工具成功率与耗时，用于优化分析规则与调用策略。
-- 评估体系与持续自我优化：构建覆盖数据准确率、检索命中率、幻觉率及报告完整度的评估体系；将失败任务沉淀为 eval case，归因检索遗漏或规则缺失等问题，通过回归测试持续优化 RAG 策略与编排流程。
-
-## 为什么做这个项目
-
-个人股票研究最大的痛点不是“没有信息”，而是信息太分散：
-
-- 财报在公告里，行情在行情源里，新闻在资讯站里，研究判断在自己的笔记里；
-- 每次复盘都要重复查数据、翻历史结论、找当时买入/卖出的理由；
-- LLM 可以生成分析，但如果没有证据约束、工具调用记录和长期记忆，很容易变成一次性问答；
-- 股票研究需要持续跟踪，“上一次结论为什么改变”往往比“这一次结论是什么”更重要。
-
-因此本项目把重点放在 Agent 工程能力上：任务编排、证据治理、工具调用、长期记忆、Wiki 自升级、评估闭环，而不是单纯展示前后端页面。
-
-## 核心能力一览
-
-| 能力模块 | 解决的问题 | 当前实现方向 |
-| --- | --- | --- |
-| 主控 Agent 编排 | 把一次研究拆成可追踪、可恢复的节点 | LangGraph 风格任务图、任务状态表、节点级状态记录 |
-| 多子 Agent / Skills | 将财务、估值、风险、行业分析拆成专业能力 | 内置 Skills 注册表、Skill Executor、可扩展 Skill.md 描述 |
-| MCP 工具调用 | 将行情、财报、新闻、Wiki 记忆封装成标准工具 | market-data、financial-report、news-sector、wiki-memory MCP 服务 |
-| Wiki 知识库 | 沉淀公司、行业、指标、研究笔记 | Markdown 化知识库、结构化 Wiki API、自动写回机制 |
-| RAG 检索增强 | 让报告基于证据，而不是模型空想 | 混合检索、证据片段、引用约束、证据覆盖检查 |
-| 长期记忆 | 记录个人研究偏好、历史判断与结论变化 | Memory 模型、记忆更新节点、公司级研究上下文 |
-| 证据账本 | 保留每条结论背后的来源、时间和置信度 | Evidence Ledger、报告引用、幻觉检查 |
-| Eval 评估体系 | 让失败变成可回归的测试样本 | 数据准确率、检索命中率、幻觉率、报告完整度 |
-| 任务可观测 | 追踪每个工具、节点、Agent 的耗时和成功率 | 任务状态表、调用链路、Skills/MCP 统计 |
-| Docker 部署 | 降低本地环境污染和复现成本 | Docker Compose 启动后端、前端、PostgreSQL、Redis |
+- Wiki 知识库自我更新：设计公司、行业、指标和研究笔记知识库，将财报摘要、市值波动、财务状态、风险清单和分析框架沉淀为 Markdown；Agent 完成分析后，将关键事件、财务指标、风险变化和结论调整写回 Wiki。
+- Agent 编排与工具反馈优化：设计主控 Agent + 专业节点的任务流，将研究过程拆成数据检查、证据检索、财务计算、估值分析、风险识别、报告生成、Wiki 写回等阶段；记录 Skills/MCP 调用链路、成功率和耗时，用于优化工具选择和调用策略。
+- 评估体系与持续改进：构建覆盖数据准确率、检索命中率、证据覆盖率、幻觉风险和报告完整度的评估体系；将失败任务沉淀为 eval case，通过回归测试定位检索遗漏、规则缺失或工具异常。
 
 ## 整体架构
 
 ```mermaid
 flowchart TB
-    User["用户：输入股票代码 / 公司 / 研究问题"] --> UI["研究工作台<br/>公司驾驶舱 / 报告中心 / Wiki / Eval"]
-    UI --> API["FastAPI API 层"]
-    API --> Task["Agent Task Service<br/>任务创建 / 状态追踪 / 结果查询"]
-    Task --> Graph["Agent Runtime<br/>LangGraph 风格编排"]
+    U["用户输入<br/>股票代码 / 公司 / 研究问题"] --> FE["研究工作台<br/>个股研究 / Wiki / 工具监测 / Eval"]
+    FE --> API["FastAPI API"]
+    API --> Task["Agent Task Service<br/>任务创建 / 状态查询 / 结果保存"]
+    Task --> Runtime["Agent Runtime<br/>状态机 + 编排图"]
 
-    Graph --> Planner["主控 Agent<br/>任务拆解与路由"]
-    Planner --> DataAgent["数据检查 Agent"]
-    Planner --> FinanceAgent["财务计算 Agent"]
-    Planner --> ValuationAgent["估值分析 Agent"]
-    Planner --> RiskAgent["风险识别 Agent"]
-    Planner --> ReportAgent["报告生成 Agent"]
+    Runtime --> Context["上下文加载<br/>历史报告 / Wiki / 长期记忆"]
+    Runtime --> Retrieve["证据检索<br/>财报 / 公告 / 新闻 / 笔记"]
+    Runtime --> Tools["Skills & MCP Gateway<br/>工具选择 / 调用 / 记录"]
+    Runtime --> Reason["分析节点<br/>财务 / 估值 / 风险 / 反证"]
+    Runtime --> Report["报告生成<br/>结论 + 证据引用"]
+    Runtime --> Eval["Eval Runner<br/>准确率 / 命中率 / 覆盖率"]
+    Runtime --> WikiWrite["Wiki Writer<br/>知识库写回"]
 
-    DataAgent --> Skills["Skills Registry / Executor"]
-    FinanceAgent --> Skills
-    ValuationAgent --> Skills
-    RiskAgent --> Skills
-    ReportAgent --> RAG["RAG 检索与证据治理"]
+    Tools --> Market["行情 MCP"]
+    Tools --> Financial["财报 MCP"]
+    Tools --> News["新闻行业 MCP"]
+    Tools --> WikiMCP["Wiki Memory MCP"]
 
-    Skills --> MCP["MCP Gateway"]
-    MCP --> Market["行情 MCP"]
-    MCP --> Financial["财报 MCP"]
-    MCP --> News["新闻行业 MCP"]
-    MCP --> WikiMCP["Wiki Memory MCP"]
-
-    RAG --> Wiki["Markdown Wiki 知识库"]
-    RAG --> DB["PostgreSQL<br/>任务 / 报告 / 记忆 / Eval"]
-    Graph --> Redis["Redis / Celery<br/>异步任务队列"]
-    Graph --> Eval["Eval System<br/>准确率 / 命中率 / 幻觉率 / 完整度"]
-    Graph --> WikiWriter["Wiki 自升级写回"]
-    WikiWriter --> Wiki
+    Context --> DB["PostgreSQL<br/>任务 / 报告 / 记忆 / 评估"]
+    Retrieve --> Wiki["Markdown Wiki"]
+    WikiWrite --> Wiki
+    Eval --> Cases["Eval Cases<br/>失败样本 / 回归测试"]
+    Task --> Queue["Redis + Celery<br/>异步任务"]
 ```
 
-## Agent 工作流
+## Agent 任务流
 
-一次完整的公司基本面研究任务，会被拆成多个可观察节点：
-
-```mermaid
-sequenceDiagram
-    participant U as User
-    participant API as FastAPI
-    participant RT as Agent Runtime
-    participant S as Skills/MCP
-    participant R as RAG/Wiki
-    participant E as Eval
-    participant W as Wiki Writer
-
-    U->>API: 提交研究任务 000333.SZ
-    API->>RT: 创建 Agent Task
-    RT->>R: 加载历史研究记忆
-    RT->>S: 调用行情 / 财报 / 新闻 / 公告工具
-    S-->>RT: 返回结构化数据与来源
-    RT->>R: 检索 Wiki、历史报告、个人笔记
-    R-->>RT: 返回证据片段与引用
-    RT->>RT: 财务计算、估值分析、风险识别
-    RT->>RT: 生成 Claim-first 报告
-    RT->>E: 数据准确率 / 检索命中率 / 幻觉率评估
-    E-->>RT: 评估分数与失败归因
-    RT->>W: 写回关键事件、风险、结论变化
-    W->>R: 更新 Markdown Wiki
-    RT-->>API: 返回报告、证据、任务状态
-    API-->>U: 展示分析结果
-```
-
-## Wiki 知识库自我升级机制
-
-本项目的一个重点是“分析不是终点，沉淀才是终点”。每次 Agent 生成报告后，都会把新的结构化结论写回 Wiki。
+一次基本面分析任务不是单次 LLM 调用，而是一条可追踪的流程。
 
 ```mermaid
 flowchart LR
-    A["公开财报 / 公告 / 新闻"] --> B["结构化抽取"]
-    C["个人研究笔记 / 交易复盘"] --> D["语义切分"]
-    B --> E["公司 Wiki"]
-    D --> E
-    E --> F["RAG 检索"]
-    F --> G["Agent 分析"]
-    G --> H["关键事件"]
-    G --> I["财务变化"]
-    G --> J["风险清单"]
-    G --> K["结论变化"]
-    H --> L["Wiki Writer"]
-    I --> L
-    J --> L
-    K --> L
-    L --> E
+    A["创建任务"] --> B["加载上下文"]
+    B --> C["检查数据新鲜度"]
+    C --> D["检索证据"]
+    D --> E["调用 Skills/MCP"]
+    E --> F["生成中间结论"]
+    F --> G["证据覆盖检查"]
+    G --> H{"是否通过"}
+    H -->|是| I["生成报告"]
+    H -->|否| D
+    I --> J["运行 Eval"]
+    J --> K["写回 Wiki"]
+    K --> L["保存任务结果"]
 ```
 
-Wiki 目录建议：
+关键节点：
+
+| 节点 | 作用 | 产物 |
+| --- | --- | --- |
+| 加载上下文 | 读取公司历史报告、Wiki、长期记忆 | 研究背景、历史结论 |
+| 检查数据新鲜度 | 确认财报、行情、新闻的时间戳 | 缺失字段、数据时间范围 |
+| 检索证据 | 从 Wiki、公告、财报、新闻中召回材料 | Evidence Items |
+| 调用 Skills/MCP | 执行财务计算、估值、风险识别、外部数据获取 | Tool Calls |
+| 证据覆盖检查 | 检查结论是否有证据支撑 | 覆盖率、缺口列表 |
+| 生成报告 | 输出结构化 Markdown 报告 | Report |
+| Eval | 评估准确率、命中率、完整度 | Eval Result |
+| Wiki 写回 | 更新公司 Wiki、风险清单、结论变化 | Wiki Update |
+
+## 多 Agent / 节点职责
+
+```mermaid
+flowchart TB
+    Master["主控 Agent<br/>任务拆解 / 路由 / 状态管理"] --> Data["Data Check<br/>数据完整性与口径检查"]
+    Master --> Evidence["Evidence Agent<br/>检索与证据账本"]
+    Master --> Finance["Financial Agent<br/>三张表与指标计算"]
+    Master --> Valuation["Valuation Agent<br/>PE/PB/市值/估值区间"]
+    Master --> Risk["Risk Agent<br/>风险红旗与反证检查"]
+    Master --> Report["Report Agent<br/>报告组织与引用"]
+    Master --> Memory["Memory Agent<br/>Wiki 与长期记忆更新"]
+
+    Data --> Monitor["调用监测"]
+    Evidence --> Monitor
+    Finance --> Monitor
+    Valuation --> Monitor
+    Risk --> Monitor
+    Report --> Monitor
+    Memory --> Monitor
+```
+
+| 模块 | 输入 | 输出 | 设计约束 |
+| --- | --- | --- | --- |
+| 主控 Agent | 用户问题、股票代码、任务类型 | 节点执行顺序、任务状态 | 不直接写结论，负责协调 |
+| Data Check | 行情、财报、公告元数据 | 数据缺失、口径差异、新鲜度 | 不用模拟数据冒充真实数据 |
+| Evidence Agent | 查询问题、Wiki、财报、新闻 | 证据片段、来源、时间戳 | 证据必须可追溯 |
+| Financial Agent | 利润表、资产负债表、现金流量表 | ROE、毛利率、现金流质量等 | 保留计算口径 |
+| Valuation Agent | PE、PB、市值、历史区间 | 估值位置、同业对比 | 估值结论必须带假设 |
+| Risk Agent | 财务异常、新闻事件、历史风险 | 风险红旗、反证清单 | 优先发现反证 |
+| Report Agent | 证据账本、指标、节点结果 | Markdown 研究报告 | 核心结论绑定证据 |
+| Memory Agent | 报告结论、Eval 结果、历史 Wiki | Wiki 更新、长期记忆 | 只写入高置信内容 |
+
+## Skills 与 MCP 工具层
+
+Skills 和 MCP 是本项目的工具层。它们被设计成可注册、可观测、可替换的能力，而不是写死在报告生成逻辑里。
+
+```mermaid
+flowchart LR
+    Runtime["Agent Runtime"] --> Registry["Skills Registry"]
+    Runtime --> Gateway["MCP Gateway"]
+
+    Registry --> S1["three_statement_analysis"]
+    Registry --> S2["cashflow_quality"]
+    Registry --> S3["dupont_analysis"]
+    Registry --> S4["valuation_range"]
+    Registry --> S5["risk_red_flags"]
+    Registry --> S6["evidence_coverage_check"]
+
+    Gateway --> M1["market-data-mcp"]
+    Gateway --> M2["financial-report-mcp"]
+    Gateway --> M3["news-sector-mcp"]
+    Gateway --> M4["wiki-memory-mcp"]
+
+    S1 --> Ledger["Tool Call Ledger"]
+    S2 --> Ledger
+    S3 --> Ledger
+    S4 --> Ledger
+    S5 --> Ledger
+    S6 --> Ledger
+    M1 --> Ledger
+    M2 --> Ledger
+    M3 --> Ledger
+    M4 --> Ledger
+```
+
+内置 Skills：
+
+| Skill | 作用 |
+| --- | --- |
+| `three_statement_analysis` | 分析利润表、资产负债表、现金流量表之间的关系 |
+| `cashflow_quality` | 检查净利润与经营现金流是否匹配 |
+| `dupont_analysis` | 拆解 ROE 来源 |
+| `valuation_range` | 分析 PE/PB、市值变化和估值区间 |
+| `risk_red_flags` | 识别财务、经营、估值和治理风险 |
+| `peer_comparison_analysis` | 与同行公司做横向对比 |
+| `investment_thesis_check` | 检查当前事实是否支持原始投资假设 |
+| `evidence_coverage_check` | 检查报告结论是否有足够证据支撑 |
+
+MCP 服务：
+
+| MCP | 连接对象 | 用途 |
+| --- | --- | --- |
+| `market-data-mcp` | 行情、市值、估值指标 | 获取价格、PE、PB、市值变化 |
+| `financial-report-mcp` | 财报、三张表、指标 | 获取财报摘要和结构化财务数据 |
+| `news-sector-mcp` | 新闻、行业、政策事件 | 获取公司和行业相关事件 |
+| `wiki-memory-mcp` | Wiki 与长期记忆 | 读取和写回研究知识 |
+
+## 工具调用监测
+
+每次 Skills/MCP 调用都会记录到任务链路中。监测数据用于判断工具是否稳定、是否需要降级、是否需要调整调用顺序。
+
+```mermaid
+flowchart TB
+    Call["工具调用"] --> Meta["记录元数据<br/>tool_name / params / task_id"]
+    Meta --> Time["耗时统计"]
+    Meta --> Result["成功/失败"]
+    Meta --> Evidence["返回证据数量"]
+    Meta --> Error["错误类型"]
+
+    Time --> Dashboard["工具监测面板"]
+    Result --> Dashboard
+    Evidence --> Dashboard
+    Error --> Dashboard
+
+    Dashboard --> Optimize["优化策略<br/>重试 / 降级 / 替换 / 缓存"]
+```
+
+监测指标：
+
+| 指标 | 说明 | 用途 |
+| --- | --- | --- |
+| 成功率 | 工具调用成功次数 / 总调用次数 | 识别不稳定工具 |
+| 平均耗时 | 单个工具的平均响应时间 | 优化调用顺序和超时 |
+| P95 耗时 | 高延迟场景下的响应时间 | 判断是否需要缓存或异步化 |
+| 错误类型 | 参数错误、网络失败、数据缺失、解析失败 | 做失败归因 |
+| 证据返回数 | 工具返回的有效证据数量 | 判断工具对报告的贡献 |
+| 结论引用数 | 报告中使用该工具证据的次数 | 判断工具是否真正影响结果 |
+
+## Wiki 知识库监测与自我更新
+
+Wiki 是系统的长期知识层。它不仅保存文本，还保存“结论如何变化”。
+
+```mermaid
+flowchart LR
+    Source["财报 / 公告 / 新闻 / 研究笔记"] --> Extract["抽取与结构化"]
+    Extract --> Wiki["Markdown Wiki"]
+    Wiki --> Retrieve["RAG 检索"]
+    Retrieve --> Agent["Agent 分析"]
+    Agent --> Delta["生成 Wiki Delta<br/>新增 / 更新 / 废弃"]
+    Delta --> Check["写回检查<br/>去重 / 证据 / 置信度"]
+    Check --> Wiki
+    Check --> Log["Wiki Update Log"]
+```
+
+Wiki 写回不是直接覆盖文件，而是先生成结构化变更：
+
+| 变更类型 | 例子 | 写回条件 |
+| --- | --- | --- |
+| 新增事件 | 年报发布、重大合同、收购、分红变化 | 有明确来源和日期 |
+| 更新指标 | ROE、毛利率、经营现金流、市值区间 | 数据口径明确 |
+| 更新风险 | 应收账款上升、毛利率下滑、负债率变化 | 有财务或公告证据 |
+| 结论调整 | 原判断被新财报或事件修正 | 保留历史版本 |
+| 废弃信息 | 过期假设、失效事件、重复结论 | 记录废弃原因 |
+
+Wiki 监测项：
+
+| 监测项 | 说明 |
+| --- | --- |
+| 最近更新时间 | 公司 Wiki 是否长期未更新 |
+| 证据覆盖率 | Wiki 条目是否有来源引用 |
+| 重复率 | 是否重复写入相同事实 |
+| 冲突条目 | 新结论是否与旧结论冲突 |
+| 低置信条目 | 是否存在来源不足的内容 |
+| 写回失败数 | Wiki 写回是否因格式或权限失败 |
+
+建议目录结构：
 
 ```text
 wiki/
@@ -151,229 +256,114 @@ wiki/
 │   ├── PE_TTM.md
 │   └── 经营现金流.md
 ├── research-notes/
-│   └── 2026-06-23_美的集团复盘.md
+│   └── 2026-06-24_美的集团复盘.md
 └── eval-cases/
-    └── 000333.SZ_财报口径缺失案例.md
+    └── 000333.SZ_证据缺失案例.md
 ```
 
-写回内容示例：
+## 证据账本
 
-| 写回类型 | 示例内容 | 作用 |
-| --- | --- | --- |
-| 关键事件 | 年报发布、重大收购、分红变化、管理层变化 | 支撑后续事件复盘 |
-| 财务信息 | 营收、归母净利、毛利率、ROE、现金流质量 | 形成公司长期财务画像 |
-| 风险清单 | 应收账款上升、毛利率下滑、估值分位偏高 | 下次分析自动提醒 |
-| 结论变化 | 从“现金流稳健”调整为“需关注库存压力” | 保留研究观点演进 |
-| 证据引用 | 公告链接、新闻来源、财报页码、数据时间 | 降低幻觉与误判 |
-
-## 多 Agent 协作设计
+报告中的关键结论需要关联证据。系统会维护 Evidence Ledger，记录来源、时间、片段、置信度和对应结论。
 
 ```mermaid
 flowchart TB
-    Master["主控 Agent<br/>Plan / Route / Reflect"] --> A["Data Check Agent<br/>数据完整性与口径检查"]
-    Master --> B["Financial Agent<br/>三张表与关键指标计算"]
-    Master --> C["Valuation Agent<br/>PE/PB/市值/分位分析"]
-    Master --> D["Risk Agent<br/>风险红旗与反证检查"]
-    Master --> E["News Sector Agent<br/>新闻、行业与催化因素"]
-    Master --> F["Report Agent<br/>报告生成与证据引用"]
-    Master --> G["Memory Agent<br/>Wiki 写回与长期记忆更新"]
+    Query["研究问题"] --> R1["结构化数据查询"]
+    Query --> R2["Wiki 检索"]
+    Query --> R3["新闻/公告检索"]
+    Query --> R4["历史报告检索"]
 
-    A --> Tools["Skills / MCP Tools"]
-    B --> Tools
-    C --> Tools
-    D --> Tools
-    E --> Tools
-    F --> Evidence["Evidence Ledger"]
-    G --> Wiki["Wiki Knowledge Base"]
-```
-
-各 Agent 的职责边界：
-
-| Agent | 输入 | 输出 | 关键约束 |
-| --- | --- | --- | --- |
-| Data Check Agent | 股票代码、公司名、时间范围 | 数据可用性、缺失字段、数据时间戳 | 不允许用模拟数据冒充真实数据 |
-| Financial Agent | 财报、财务摘要、三张表 | 营收、利润、ROE、现金流、负债率等指标 | 保留计算公式和数据来源 |
-| Valuation Agent | 行情、市值、PE/PB、历史区间 | 估值位置、历史分位、同业对比 | 明确估值不等于投资建议 |
-| Risk Agent | 财报异常、新闻、历史风险 | 风险红旗、反证清单、关注事项 | 优先寻找反证，避免单边乐观 |
-| News Sector Agent | 新闻、行业事件、政策变化 | 行业热度、短期催化、潜在冲击 | 区分事实、传闻和模型推断 |
-| Report Agent | 证据账本、指标、记忆 | 结构化 Markdown 研究报告 | 每个核心结论必须绑定证据 |
-| Memory Agent | 报告结论、评估结果、历史 Wiki | Wiki 更新、长期记忆更新 | 只写入高置信、可追溯内容 |
-
-## Skills / MCP 工具体系
-
-本项目将能力分为两层：
-
-- Skills：偏“分析方法”，例如三张表分析、杜邦分析、现金流质量、估值区间、风险红旗检查；
-- MCP：偏“外部工具与数据连接”，例如行情数据、财报数据、新闻行业数据、Wiki 记忆读写。
-
-```mermaid
-flowchart LR
-    Task["Agent Task"] --> Registry["Skills Registry"]
-    Registry --> Skill1["three_statement_analysis"]
-    Registry --> Skill2["cashflow_quality"]
-    Registry --> Skill3["valuation_range"]
-    Registry --> Skill4["risk_red_flags"]
-    Registry --> Skill5["evidence_coverage_check"]
-
-    Task --> Gateway["MCP Gateway"]
-    Gateway --> M1["market-data-mcp"]
-    Gateway --> M2["financial-report-mcp"]
-    Gateway --> M3["news-sector-mcp"]
-    Gateway --> M4["wiki-memory-mcp"]
-
-    Skill1 --> Ledger["Tool Call Ledger"]
-    Skill2 --> Ledger
-    Skill3 --> Ledger
-    Skill4 --> Ledger
-    Skill5 --> Ledger
-    M1 --> Ledger
-    M2 --> Ledger
-    M3 --> Ledger
-    M4 --> Ledger
-```
-
-内置 Skills 示例：
-
-| Skill | 作用 |
-| --- | --- |
-| `three_statement_analysis` | 分析利润表、资产负债表、现金流量表之间的勾稽关系 |
-| `cashflow_quality` | 检查净利润与经营现金流是否匹配，识别利润质量问题 |
-| `dupont_analysis` | 拆解 ROE 来源，区分利润率、周转率和杠杆贡献 |
-| `valuation_range` | 结合 PE/PB、市值变化与历史区间判断估值位置 |
-| `risk_red_flags` | 识别财务、经营、估值、治理等风险红旗 |
-| `peer_comparison_analysis` | 与同行公司做横向对比 |
-| `investment_thesis_check` | 检查当前事实是否支持原始投资假设 |
-| `evidence_coverage_check` | 检查报告结论是否有足够证据覆盖 |
-
-## Skills/MCP 反馈优化
-
-所有 Skills 和 MCP 调用都会写入任务状态表，用于后续分析工具质量：
-
-| 观测指标 | 用途 |
-| --- | --- |
-| 成功率 | 判断工具是否稳定，是否需要降级或替换数据源 |
-| 平均耗时 | 优化调用顺序、缓存策略和超时配置 |
-| 失败原因 | 区分网络问题、参数错误、数据缺失、解析失败 |
-| 输入输出规模 | 控制上下文长度和 RAG 片段数量 |
-| 命中证据数量 | 判断检索策略是否有效 |
-| 对最终报告贡献度 | 评估工具是否真正影响结论 |
-
-优化闭环：
-
-```mermaid
-flowchart LR
-    A["工具调用"] --> B["记录成功率 / 耗时 / 错误"]
-    B --> C["失败归因"]
-    C --> D{"问题类型"}
-    D -->|数据缺失| E["补充 MCP 数据源"]
-    D -->|检索遗漏| F["调整 RAG 切分与召回"]
-    D -->|规则缺失| G["新增或修改 Skill"]
-    D -->|幻觉风险| H["增强证据覆盖检查"]
-    E --> I["回归测试"]
-    F --> I
-    G --> I
-    H --> I
-    I --> A
-```
-
-## RAG 与证据治理
-
-本项目不鼓励 Agent 直接“凭感觉写报告”。报告生成前，需要先整理证据账本：
-
-```mermaid
-flowchart TB
-    Q["研究问题"] --> R1["向量检索<br/>语义相关"]
-    Q --> R2["关键词检索<br/>股票代码 / 指标 / 日期"]
-    Q --> R3["结构化查询<br/>财报 / 行情 / 任务历史"]
-
-    R1 --> Merge["Hybrid Merge"]
+    R1 --> Merge["合并去重"]
     R2 --> Merge
     R3 --> Merge
-    Merge --> Rank["重排与去重"]
-    Rank --> Ledger["Evidence Ledger"]
-    Ledger --> Claim["Claim-first 报告生成"]
-    Claim --> Verify["证据覆盖检查"]
-    Verify --> Report["最终研究报告"]
+    R4 --> Merge
+    Merge --> Ledger["Evidence Ledger"]
+    Ledger --> Claim["结论生成"]
+    Claim --> Coverage["证据覆盖检查"]
+    Coverage --> Report["最终报告"]
 ```
 
-证据账本字段示例：
+字段示例：
 
 | 字段 | 说明 |
 | --- | --- |
 | `source_type` | 财报、公告、新闻、Wiki、个人笔记、行情数据 |
-| `source_id` | 来源 ID、文件路径、URL 或数据库主键 |
+| `source_id` | 文件路径、URL、数据库 ID 或工具返回 ID |
 | `published_at` | 来源发布时间 |
-| `retrieved_at` | 系统检索时间 |
+| `retrieved_at` | 检索时间 |
 | `content_snippet` | 证据片段 |
-| `related_claim` | 支撑的结论 |
+| `related_claim` | 支撑的报告结论 |
 | `confidence` | 证据置信度 |
 | `freshness` | 数据新鲜度 |
 
-## 评估体系与持续自我优化
+## Eval 与自我修正闭环
 
-评估不是附属功能，而是 Agent 能不能持续进化的核心。
+Eval 的目标是把“这次分析哪里不好”转成可以回归的样本，而不是只在日志里记录一次错误。
 
 ```mermaid
-flowchart TB
-    Report["Agent 输出报告"] --> Eval["Eval Runner"]
-    Eval --> A["数据准确率<br/>指标是否算对"]
-    Eval --> B["检索命中率<br/>关键证据是否找到"]
-    Eval --> C["幻觉率<br/>是否出现无证据结论"]
-    Eval --> D["报告完整度<br/>是否覆盖财务/估值/风险/结论"]
-    Eval --> E["引用一致性<br/>结论与证据是否匹配"]
+flowchart LR
+    Report["报告输出"] --> Eval["评估"]
+    Eval --> A["数据准确率"]
+    Eval --> B["检索命中率"]
+    Eval --> C["证据覆盖率"]
+    Eval --> D["幻觉风险"]
+    Eval --> E["报告完整度"]
 
-    A --> Case["失败任务沉淀为 Eval Case"]
+    A --> Case["失败样本"]
     B --> Case
     C --> Case
     D --> Case
     E --> Case
-    Case --> Fix["归因：检索遗漏 / 规则缺失 / 工具失败 / Prompt 缺陷"]
+    Case --> Cause["归因<br/>检索遗漏 / 工具失败 / 规则缺失 / Prompt 问题"]
+    Cause --> Fix["调整 RAG / Skill / MCP / 编排"]
     Fix --> Regression["回归测试"]
-    Regression --> Better["优化 RAG / Skill / 编排流程"]
+    Regression --> Eval
 ```
 
-评估维度：
+Eval 指标：
 
-| 评估项 | 判断标准 |
+| 指标 | 检查内容 |
 | --- | --- |
-| 数据准确率 | 财务指标、同比、环比、估值指标是否与源数据一致 |
-| 检索命中率 | 是否找到了公司关键公告、财报摘要、历史研究结论 |
-| 幻觉率 | 是否出现无来源、无证据、无法复核的判断 |
-| 报告完整度 | 是否覆盖业务、财务、估值、风险、结论、后续跟踪点 |
-| 引用一致性 | 引用证据是否真的支持对应结论 |
-| Wiki 写回质量 | 是否只写入高价值、可追踪、非重复信息 |
+| 数据准确率 | 指标计算是否与源数据一致 |
+| 检索命中率 | 是否召回关键财报、公告、新闻和历史笔记 |
+| 证据覆盖率 | 核心结论是否都有证据 |
+| 幻觉风险 | 是否出现无来源、无证据或无法复核的说法 |
+| 报告完整度 | 是否覆盖业务、财务、估值、风险、结论和跟踪点 |
+| Wiki 写回质量 | 是否写入高价值、非重复、可追溯内容 |
 
-失败样本会被沉淀为 eval case，用于后续回归测试。例如：
+Eval case 示例：
 
 ```yaml
 case_id: 000333_cashflow_quality_2026q1
 stock: 000333.SZ
-failure_type: calculation_error
+failure_type: evidence_missing
 expected:
-  - 经营现金流与净利润需要同时展示
   - 现金流质量结论必须引用现金流量表
+  - 经营现金流需要和净利润一起比较
 actual:
   - 报告只引用净利润，未引用经营现金流
+root_cause:
+  - evidence_coverage_check 未覆盖现金流规则
 fix_plan:
-  - 调整 cashflow_quality Skill
-  - 增加 evidence_coverage_check 规则
+  - 更新 cashflow_quality Skill
+  - 增加现金流证据覆盖规则
 ```
 
-## 长期记忆设计
+## 长期记忆
 
-长期记忆分为三类：
+长期记忆用于记录公司研究背景、个人关注点和系统优化结果。
 
 | 记忆类型 | 内容 | 用途 |
 | --- | --- | --- |
-| 公司记忆 | 公司业务、核心指标、历史风险、跟踪事件 | 下一次分析自动加载公司背景 |
-| 个人研究记忆 | 买入/卖出理由、关注指标、研究偏好 | 让 Agent 贴合个人投资框架 |
-| 系统优化记忆 | 失败案例、工具问题、检索缺陷 | 用于优化 Skills/MCP/RAG |
+| 公司记忆 | 主营业务、历史风险、关键指标、事件时间线 | 下次分析自动加载背景 |
+| 个人研究记忆 | 买入/卖出理由、关注指标、研究偏好 | 辅助复盘个人操作 |
+| 系统优化记忆 | 失败案例、工具问题、检索缺陷 | 优化后续 Agent 流程 |
 
-记忆更新遵循三个原则：
+写入原则：
 
-1. 可追溯：每条记忆需要来源和时间。
-2. 高价值：只写入能影响后续研究的问题、事件或结论变化。
-3. 可覆盖：新事实可以更新旧结论，但要保留观点变化历史。
+1. 只写入可追溯内容；
+2. 保留来源、时间和置信度；
+3. 新结论可以更新旧结论，但需要保留变化记录；
+4. 对低置信、冲突或重复内容进入待确认队列。
 
 ## 数据模型概览
 
@@ -384,8 +374,7 @@ erDiagram
     AGENT_TASK ||--o{ EVAL_RESULT : evaluated_by
     AGENT_TASK ||--o{ REPORT : generates
     REPORT ||--o{ WIKI_UPDATE : writes
-    COMPANY ||--o{ REPORT : has
-    COMPANY ||--o{ MEMORY_ITEM : remembers
+    COMPANY ||--o{ MEMORY_ITEM : has
     COMPANY ||--o{ FINANCIAL_METRIC : owns
     COMPANY ||--o{ MARKET_SNAPSHOT : tracks
 
@@ -395,7 +384,6 @@ erDiagram
         string stock_code
         string status
         datetime created_at
-        datetime updated_at
     }
 
     TOOL_CALL {
@@ -413,56 +401,40 @@ erDiagram
         float confidence
     }
 
-    EVAL_RESULT {
-        float data_accuracy
-        float retrieval_hit_rate
-        float hallucination_score
-        float report_completeness
+    WIKI_UPDATE {
+        string page_path
+        string update_type
+        string evidence_id
+        bool applied
     }
 ```
 
 ## 当前功能
 
-- A 股公司搜索与基础信息展示；
-- 个股研究任务创建、状态追踪与结果查询；
-- 近五年季度维度的财务指标、PE/PB、市值变化分析；
-- 三张表分析、现金流质量、估值区间、风险红旗等内置 Skills；
-- 基于公开数据和 Wiki 证据生成 Markdown 研究报告；
-- 报告中心、Wiki 记忆、Skills/MCP 观测、Agent Eval 页面；
-- 支持 DeepSeek / OpenAI-compatible LLM 接口；
-- PostgreSQL 存储任务、报告、记忆与评估结果；
-- Redis + Celery 支持异步任务；
-- Docker Compose 一键启动。
-
-## 页面与展示模块
-
-| 页面 | 展示重点 |
-| --- | --- |
-| 公司驾驶舱 | 公司基础信息、核心指标、行情、估值、财务摘要 |
-| 个股研究 | 输入股票代码后触发 Agent 基本面分析 |
-| 报告中心 | 查看历史报告、Markdown 报告与证据引用 |
-| Wiki 记忆 | 公司知识库、行业知识库、研究笔记、长期记忆 |
-| Skills/MCP | 工具调用状态、成功率、耗时、错误原因 |
-| Agent Eval | 数据准确率、检索命中率、幻觉率、报告完整度 |
-| 自选监控 | 跟踪关注股票的关键变化 |
-| 新闻行业 | 新闻、行业事件、政策变化与催化因素 |
-
-项目中也包含 `ui-reference/images` 目录，用于展示 Agent 平台的产品原型与页面参考。
+- A 股公司搜索与个股研究任务；
+- 财报、行情、估值、风险等信息的结构化分析；
+- Agent 任务状态追踪；
+- Skills 注册、执行和结果记录；
+- MCP 客户端与本地 MCP 服务示例；
+- Wiki 记忆读取与写回；
+- 报告中心和 Markdown 报告生成；
+- 工具调用监测页面；
+- Agent Eval 页面；
+- Docker Compose 部署。
 
 ## 技术栈
 
 | 层级 | 技术 |
 | --- | --- |
-| Agent Runtime | LangGraph 风格编排、状态机、任务节点、证据校验 |
-| LLM | OpenAI-compatible API、DeepSeek Chat |
-| RAG | Hybrid Retriever、Embedding Adapter、Wiki 检索、证据账本 |
-| Skills | Skill Registry、Skill Executor、内置财务与风险分析 Skills |
+| Agent Runtime | LangGraph 风格编排、状态机、节点化任务 |
+| Skills | Skill Registry、Skill Executor、内置财务分析 Skills |
 | MCP | market-data、financial-report、news-sector、wiki-memory |
+| RAG | Hybrid Retriever、Evidence Ledger、证据覆盖检查 |
+| LLM | OpenAI-compatible API、DeepSeek |
 | Backend | FastAPI、SQLAlchemy、Alembic、Celery、Redis |
 | Frontend | Vue 3、TypeScript、Vite、ECharts |
 | Storage | PostgreSQL、Markdown Wiki、Redis |
 | Deploy | Docker Compose |
-| Eval | 自定义 Eval Runner、失败案例沉淀、回归测试 |
 
 ## 目录结构
 
@@ -470,20 +442,20 @@ erDiagram
 .
 ├── backend/
 │   ├── app/
-│   │   ├── agent/              # Agent 状态、图编排、节点与 Prompt
+│   │   ├── agent/              # Agent 状态、编排图、节点和 Prompt
 │   │   ├── api/                # FastAPI 路由
-│   │   ├── mcp_clients/        # MCP 客户端封装
+│   │   ├── mcp_clients/        # MCP 客户端
 │   │   ├── models/             # 数据模型
-│   │   ├── services/           # LLM、RAG、股票数据、Eval 服务
-│   │   ├── skills/             # Skills 注册、执行与内置技能
+│   │   ├── services/           # LLM、RAG、Eval、股票数据服务
+│   │   ├── skills/             # Skills 注册和内置技能
 │   │   └── workers/            # Celery 异步任务
 │   └── alembic/                # 数据库迁移
 ├── frontend/
 │   └── src/
-│       ├── views/              # 公司驾驶舱、Wiki、Eval、报告中心等页面
-│       ├── components/         # 通用组件与 Agent 面板
+│       ├── views/              # 个股研究、Wiki、工具监测、Eval 等页面
+│       ├── components/         # 通用组件和 Agent 面板
 │       ├── api/                # API Client
-│       └── stores/             # 前端状态管理
+│       └── stores/             # 前端状态
 ├── mcp_servers/
 │   ├── market-data-mcp/
 │   ├── financial-report-mcp/
@@ -500,23 +472,23 @@ erDiagram
 └── README.md
 ```
 
-## 快速启动
+## 启动
 
-所有运行和依赖安装建议在 Docker 中完成，避免污染本地环境。
+建议全部在 Docker 中运行。
 
 ```powershell
 Copy-Item .env.example .env
-# 编辑 .env，填入 OPENAI_COMPAT_API_KEY 等配置
+# 编辑 .env，填入模型和数据源配置
 docker compose up -d --build
 ```
 
 访问地址：
 
-- 前端页面：http://localhost:5173
+- 前端：http://localhost:5173
 - API 文档：http://localhost:8000/docs
 - 健康检查：http://localhost:8000/health
 
-## 必要配置
+## 配置
 
 ```env
 DATA_PROVIDER=akshare
@@ -554,68 +526,29 @@ GET /api/v1/agent/tasks/{task_id}
 GET /api/v1/reports
 ```
 
-查看 Eval：
+查看评估结果：
 
 ```http
 GET /api/v1/evals
 ```
 
-## 验证命令
+## 验证
 
 ```powershell
 docker compose exec backend pytest -q
 docker compose exec frontend npm run build
 ```
 
-如果容器尚未启动：
+## 后续计划
 
-```powershell
-docker compose up -d --build
-```
-
-## 报告输出结构
-
-Agent 生成的研究报告采用 Claim-first 结构：
-
-```text
-1. 核心结论
-2. 公司与业务概览
-3. 财务表现
-   - 营收与利润
-   - 毛利率、净利率、ROE
-   - 经营现金流质量
-4. 估值分析
-   - PE/PB
-   - 市值变化
-   - 历史区间与同业对比
-5. 风险红旗
-6. 与历史研究结论的变化
-7. 后续跟踪指标
-8. 证据引用
-9. Wiki 写回摘要
-```
-
-## 项目亮点
-
-1. 不是一次性问答，而是可复盘、可沉淀、可升级的 Agent 平台。
-2. 将个人股票研究流程拆成多个专业 Agent 和 Skills，便于扩展与评估。
-3. 使用 MCP 思路连接行情、财报、新闻、Wiki 记忆等工具，工具调用可观测。
-4. 通过证据账本和 Eval 体系降低幻觉，让每条关键结论都有来源。
-5. 自动把分析结果写回 Markdown Wiki，让知识库随着使用持续进化。
-6. 失败任务会沉淀为 eval case，通过回归测试持续优化 RAG、Skills 与编排流程。
-7. Docker-first，便于复现、演示和部署。
-
-## 后续规划
-
-- 引入真实公告 PDF 解析和页码级引用；
-- 增强 Wiki 双向链接与公司事件时间线；
-- 增加个人交易记录导入与复盘 Agent；
-- 增加同业公司自动匹配与估值分位计算；
-- 接入更多公开数据源并记录数据源可靠性；
+- 增加公告 PDF 解析和页码级引用；
+- 增加 Wiki 条目冲突检测和人工确认队列；
+- 增强工具调用 dashboard，按工具、股票、任务类型统计成功率；
+- 将 Eval case 接入 CI 回归测试；
+- 增加个人交易记录导入和复盘 Agent；
 - 支持 Agent 任务断点恢复、重试和人工确认节点；
-- 为 Skills/MCP 调用建立更完整的 dashboard；
-- 将 Eval case 与 CI 结合，形成自动回归测试。
+- 增强同业公司匹配和估值分位计算。
 
 ## License
 
-本项目用于个人学习、研究和简历项目展示。如需用于生产或投资决策，请自行补充数据授权、风控、合规与安全审查。
+本项目用于个人学习、研究和项目展示。如用于生产或投资决策，需要补充数据授权、风控、合规和安全审查。
