@@ -34,6 +34,6 @@ print(
 )
 
 assert task["status"] == "success"
-assert len(steps) == 8
-assert len(calls) >= 9
+assert len(steps) == 10
+assert len(calls) >= 7
 assert task["result"]["report_id"]

@@ -9,22 +9,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.agent.state import AGENT_NODES
 from app.models.agent import AgentStep, AgentTask, ToolCallLog
 from app.schemas.stock import FundamentalTaskCreate
 from app.services.stocks.real_data import RealDataError, normalize_ts_code
 from app.workers.tasks_agent import generate_fundamental_analysis
 
 router = APIRouter(prefix="/agent/tasks", tags=["agent"])
-NODES = [
-    "check_data_freshness",
-    "load_stock_context",
-    "retrieve_evidence",
-    "run_financial_skills",
-    "generate_report",
-    "verify_evidence",
-    "update_memory",
-    "evaluate_output",
-]
+NODES = AGENT_NODES
 
 
 def task_dict(x):
