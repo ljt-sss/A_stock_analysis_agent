@@ -6,7 +6,12 @@ const routes = [
     path: '/',
     component: MainLayout,
     children: [
-      { path: '', redirect: '/stocks/600519.SH' },
+      {
+        path: '',
+        name: 'dashboard',
+        component: () => import('../views/DashboardView.vue'),
+        meta: { title: 'Agent Mission Control', commandView: true },
+      },
       {
         path: 'stocks/:tsCode?',
         name: 'stock',
@@ -23,7 +28,7 @@ const routes = [
         path: 'ops',
         name: 'ops',
         component: () => import('../views/SkillsMcpView.vue'),
-        meta: { title: '工具与知识库' },
+        meta: { title: 'Agent 能力中心', commandView: true },
       },
     ],
   },

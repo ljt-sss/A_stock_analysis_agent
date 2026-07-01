@@ -6,4 +6,5 @@ import './styles/variables.css'
 import './styles/global.css'
 import './styles/forms.css'
 import './styles/functional.css'
+import './styles/mission-control.css'
 createApp(App).use(createPinia()).use(router).mount('#app')

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { Bot, BookOpenCheck, FileText, LineChart, Search, Star } from 'lucide-vue-next'
+import { Bot, Boxes, FileText, LayoutDashboard, LineChart, Search, Star } from 'lucide-vue-next'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api/client'
 import { stockApi } from '../api/stocks'
@@ -19,13 +19,15 @@ const health = ref<any>(null)
 let timer: ReturnType<typeof setTimeout> | undefined
 
 const title = computed(() => String(route.meta.title || '个股研究'))
+const commandView = computed(() => Boolean(route.meta.commandView))
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
 const nav = [
+  ['Mission Control', '/', LayoutDashboard],
   ['个股研究', '/stocks/600519.SH', LineChart],
   ['AI 分析记录', '/analysis', FileText],
-  ['工具与知识库', '/ops', BookOpenCheck],
+  ['Agent 能力中心', '/ops', Boxes],
 ]
 
 watch(keyword, value => {
@@ -80,7 +82,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'command-shell': commandView }">
     <header class="topbar">
       <div class="brand">
         <span class="brand-icon"><Star :size="22" fill="currentColor" /></span>
@@ -155,7 +157,7 @@ onMounted(async () => {
     </aside>
 
     <main class="content">
-      <div class="page-heading">
+      <div v-if="!commandView" class="page-heading">
         <h1>{{ title }}</h1>
         <span>搜索只查看真实数据 · 手动 AI 分析后归档进入 wiki 知识库</span>
       </div>

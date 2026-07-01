@@ -1,233 +1,270 @@
-# A 股投研 Multi-Agent Platform
+# A 股基本面研究 Agent 平台
 
-基于 **LangGraph + FastAPI + Vue 3** 构建的 A 股基本面研究系统。系统采用“主控 Agent + 专业执行 Agent”架构，把一次公司研究拆成数据清洗、证据检索、财务计算、逻辑推理、报告撰写、质量评估与 Wiki 写回，并通过结构化 State 串联整条链路。
+这是一个用于个人股票研究与复盘的工程项目。
+
+我希望解决的问题并不是“让大模型写一篇股票分析”，而是把一次基本面研究拆成一条可执行的工作流：先检查数据，再查找证据、计算指标、识别风险、生成报告，最后做质量评估并把有效结论写回知识库。
 
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-Stateful_Agents-1C3C3C)](https://langchain-ai.github.io/langgraph/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Agent_Runtime-1C3C3C)](https://langchain-ai.github.io/langgraph/)
 [![Vue](https://img.shields.io/badge/Vue-3-42B883?logo=vuedotjs&logoColor=white)](https://vuejs.org/)
 [![Docker](https://img.shields.io/badge/Docker_Compose-Ready-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
 
-> 本项目用于工程学习与个人研究复盘，不构成投资建议。聚合数据可能存在延迟或口径差异，最终应以上市公司公告和交易所披露为准。
+> 项目用于工程学习和个人研究，不构成投资建议。财务及行情数据可能存在延迟或口径差异，请以上市公司公告和交易所披露为准。
 
-## 项目亮点
+## 项目解决什么问题
 
-- **多 Agent 协作编排**：LangGraph 主控节点生成执行计划，专业节点分别负责数据清洗、财务计算、逻辑推理和报告撰写，统一 State 管理任务进度、节点产物和错误信息。
-- **Context Engineering**：上下文按“最近原文 + 滚动摘要 + 关键决策”组织，报告节点只接收压缩证据与结构化分析结果；运行时记录压缩前后估算 Token 和节省率。
-- **RAG 重排与片段压缩**：候选证据经过查询相关性、来源权重和基础召回分联合重排，再按字符预算压缩，减少长文本注意力衰减。
-- **动态 Wiki 知识库**：每次分析自动提取财务指标变化、风险点、核心结论、评估状态和置信度，作为增量版本写回公司 Wiki，而不是覆盖历史认知。
-- **Function Calling 工具层**：财务分析、杜邦拆解、现金流质量、估值区间和风险识别封装为可注册 Skill，调用输入、输出、耗时和状态统一落库。
-- **评估与 Bad Case 回流**：逐任务计算数据准确率、检索命中率、引用覆盖率、工具成功率、完整度和幻觉率；未通过质量门禁的任务自动生成 Eval Case。
+个人做股票研究时，常见问题并不是缺少一段分析文字，而是：
 
-## 系统架构
+- 财报、行情、公告和笔记分散，分析过程难以复现；
+- 模型容易跳过数据口径，直接给出听起来合理的结论；
+- 一次报告完成后，结论和风险点没有沉淀，下次还要重新整理；
+- 工具调用失败、证据不足或数字错误时，很难知道问题出在哪个环节。
+
+因此项目重点放在工作流、证据和评估，而不是聊天界面。
+
+## 已实现功能
+
+- 输入 A 股代码，查看公司摘要、季度财务数据、估值序列和三张表数据；
+- 创建基本面分析任务，实时查看 Agent 节点进度和工具调用记录；
+- 通过财务 Skills 计算估值分位、现金流质量、杜邦拆解和风险项；
+- 为报告保留证据账本，记录来源、报告期和支撑结论；
+- 对报告数字、引用覆盖和禁止性表述做自动检查；
+- 将未通过检查的任务转成 Eval Case，供后续回归；
+- 将指标变化、风险点和结论增量写回公司 Wiki；
+- 提供 Mission Control、个股研究、能力中心和报告归档页面。
+
+## 产品界面
+
+| Agent Mission Control | 个股基本面研究 |
+| --- | --- |
+| ![Agent Mission Control](ui-reference/images/08_mission_control_light.png) | ![个股基本面研究](ui-reference/images/09_stock_research_light.png) |
+
+Mission Control 用于查看任务节点、证据、工具调用和记忆写回；个股研究页用于核对真实行情、财务趋势和三张表数据，并发起分析任务。
+
+## 整体架构
 
 ```mermaid
 flowchart TB
-    User["研究员 / Web 工作台"] --> API["FastAPI API"]
-    API --> Queue["Celery + Redis"]
-    Queue --> Supervisor["Master Orchestrator<br/>计划 / 路由 / 状态管理"]
+    UI["Vue 研究工作台"] --> API["FastAPI"]
+    API --> Queue["Celery / Redis"]
+    Queue --> Graph["LangGraph Runtime"]
 
-    Supervisor --> Context["Context Engineering<br/>最近原文 + 滚动摘要 + 关键决策"]
-    Context --> Data["Data Cleaning Agent<br/>去重 / 缺失检查 / 新鲜度"]
-    Data --> RAG["Evidence Agent<br/>召回 / 重排 / 片段压缩"]
-    RAG --> Finance["Financial Agent<br/>三张表 / 杜邦 / 现金流 / 估值"]
-    Finance --> Reason["Reasoning Agent<br/>论点 / 风险 / 反证 / 置信度"]
-    Reason --> Writer["Report Agent<br/>结构化报告 / 证据引用"]
-    Writer --> Guard["Quality Gates<br/>证据校验 + 自动评估"]
-    Guard --> Wiki["Wiki Evolution<br/>增量结论 / 风险 / 指标变化"]
+    Graph --> Context["Context Pack"]
+    Graph --> Data["Data Cleaning Agent"]
+    Graph --> Evidence["Evidence Agent"]
+    Graph --> Finance["Financial Agent"]
+    Graph --> Reason["Reasoning Agent"]
+    Graph --> Report["Report Agent"]
+    Graph --> Eval["Quality Eval"]
+    Graph --> Memory["Wiki Memory"]
 
-    RAG --> PG[("PostgreSQL + pgvector")]
-    Finance --> Ledger[("Tool Call Ledger")]
-    Guard --> Eval[("Eval Result / Bad Case")]
-    Wiki --> PG
+    Data --> Provider["AkShare / Tushare / CNInfo Provider"]
+    Finance --> Skills["Financial Skills"]
+    Evidence --> DB[("PostgreSQL / pgvector")]
+    Eval --> Cases["Eval Cases"]
+    Memory --> DB
 ```
 
-## LangGraph 执行链
+后端采用 FastAPI 提供接口，Celery 负责异步任务，LangGraph 管理分析节点和状态流转。任务、报告、证据、工具日志、评估结果和 Wiki 版本统一保存在 PostgreSQL 中。
+
+## 一次分析如何执行
 
 ```mermaid
 flowchart LR
-    A["master_orchestrator"] --> B["load_context"]
-    B --> C["data_cleaning_agent"]
-    C --> D["retrieve_evidence"]
-    D --> E["financial_calculation_agent"]
-    E --> F["reasoning_agent"]
-    F --> G["report_writer_agent"]
-    G --> H["verify_evidence"]
-    H --> I["evaluate_output"]
-    I --> J["update_memory"]
+    A["主控规划"] --> B["加载上下文"]
+    B --> C["数据清洗"]
+    C --> D["证据检索"]
+    D --> E["财务计算"]
+    E --> F["逻辑推理"]
+    F --> G["报告撰写"]
+    G --> H["证据检查"]
+    H --> I["质量评估"]
+    I --> J["Wiki 写回"]
 ```
 
-| 节点 | 职责 | 结构化产物 |
+| 节点 | 主要工作 | 输出 |
 | --- | --- | --- |
-| `master_orchestrator` | 生成主控计划与质量门禁 | `master_plan` |
-| `load_context` | 加载行情、财务与历史上下文 | `context_pack`、Token 估算 |
-| `data_cleaning_agent` | 财务期间去重、缺失字段与新鲜度检查 | `cleaned_data` |
-| `retrieve_evidence` | 候选证据召回、重排和压缩 | `compressed_evidence` |
-| `financial_calculation_agent` | Function Calling 执行财务 Skills | `skill_results` |
-| `reasoning_agent` | 合并论点、估值、现金流、风险与反证 | `reasoning_result` |
-| `report_writer_agent` | 基于压缩上下文撰写报告 | `draft_report` |
-| `verify_evidence` | 禁止性表述与证据数量门禁 | `verified_report` |
-| `evaluate_output` | 计算质量指标并生成 Bad Case | `eval_result` |
-| `update_memory` | 将高价值增量追加到 Wiki | `wiki_delta` |
+| `master_orchestrator` | 确定执行节点和质量门禁 | `master_plan` |
+| `load_context` | 读取行情、财务和研究上下文 | `context_pack` |
+| `data_cleaning_agent` | 去重、检查缺失字段和数据新鲜度 | `cleaned_data` |
+| `retrieve_evidence` | 召回、重排并压缩证据片段 | `compressed_evidence` |
+| `financial_calculation_agent` | 调用财务分析 Skills | `skill_results` |
+| `reasoning_agent` | 整理论点、估值、风险和反证 | `reasoning_result` |
+| `report_writer_agent` | 根据结构化输入撰写报告 | `draft_report` |
+| `verify_evidence` | 检查证据数量和禁止性表述 | `verified_report` |
+| `evaluate_output` | 计算质量指标，生成失败原因 | `eval_result` |
+| `update_memory` | 追加公司 Wiki 和长期记忆 | `wiki_delta` |
 
-## Context Engineering
+这里的“多 Agent”不是同时开多个聊天窗口，而是把不同职责做成边界清晰的执行节点。每个节点只返回约定字段，方便记录、重试和定位问题。
 
-传统 Agent 容易把历史报告、检索文档和中间结果全部塞进下一轮 Prompt。本项目把上下文分成三层：
+## 我重点处理的几个问题
+
+### 1. 控制节点间上下文
+
+如果把历史报告、财务数据、检索文档和所有中间结果不断传给后续模型，Prompt 会快速膨胀，重要信息也容易被淹没。
+
+项目将上下文拆成三部分：
 
 ```text
 context_pack
-├── recent_raw       # 最新股票摘要、最新财务期、最新估值点
-├── rolling_summary  # 已完成工作和历史信息的滚动摘要
-├── key_decisions    # 数字口径、证据约束、禁止项等稳定决策
-├── source_manifest  # 数据源清单
-└── token_metrics    # 压缩前后 Token 估算与节省率
+├── recent_raw       # 最近一期财务和估值数据
+├── rolling_summary  # 前序信息的滚动摘要
+├── key_decisions    # 数据口径、证据要求和禁止项
+└── token_metrics    # 压缩前后的估算 Token
 ```
 
-报告 Agent 不读取完整原始文档，只接收 `context_pack + compressed_evidence + reasoning_result`。这种状态契约能减少节点耦合，也方便定位某个结论究竟来自数据、工具还是推理。
+报告节点只接收压缩后的证据、推理结果和 Context Pack，不直接读取全部原始材料。
 
-## Skills 与工具调用
+### 2. 让结论能够追溯
 
-| Skill | 作用 |
-| --- | --- |
-| `valuation_range_analysis` | 计算 PE/PB 历史分位与估值位置 |
-| `three_statement_analysis` | 联动分析利润表、资产负债表和现金流量表 |
-| `dupont_analysis` | 拆解 ROE 驱动因素 |
-| `cashflow_quality_analysis` | 计算经营现金流与利润匹配程度 |
-| `business_segment_analysis` | 分析业务结构与主要驱动 |
-| `risk_red_flags_analysis` | 提取财务、行业和数据口径风险 |
-| `investment_thesis_check` | 检查当前事实是否支持原研究假设 |
+证据检索会综合查询相关性、来源类型和召回分数进行重排，再按长度预算压缩片段。报告保存时，同时保存 `AnalysisEvidence`：
 
-所有调用均写入 `tool_call_log`，保留工具名、类型、输入摘要、结构化输出、状态和耗时。金融数据提供方采用可替换 Provider 设计，已包含 AkShare、Tushare、巨潮资讯与 Mock Provider 接口。
+- 证据来源；
+- 对应报告期；
+- 原始片段；
+- 支撑的指标或结论。
 
-## 知识库自我进化
+这样在复核报告时，可以区分“数据事实”“工具计算”和“模型判断”。
 
-Agent 不直接覆盖公司 Wiki，而是追加一条可追踪的研究增量：
+### 3. 避免知识库只增不管
+
+Agent 不会直接覆盖公司 Wiki，而是追加一条研究增量，包括：
 
 ```json
 {
   "period": "2025Q4",
-  "metrics": {"revenue_yoy": 12.4, "net_profit_yoy": 9.8},
+  "metrics": {
+    "revenue_yoy": 12.4,
+    "net_profit_yoy": 9.8
+  },
   "risks": ["经营现金流转化下降"],
-  "conclusions": ["盈利保持增长，但现金流质量需要跟踪"],
+  "conclusions": ["盈利增长，但现金流质量需要继续跟踪"],
   "confidence": 0.85,
   "eval_status": "passed"
 }
 ```
 
-每条增量同时进入 `AgentMemory` 和 `WikiChunk`，带任务 ID、版本号、评估状态与置信度，可用于后续检索、结论对比和复盘。
+每次更新带有任务 ID、版本号、评估状态和置信度，旧结论仍然保留，便于比较观点变化。
 
-## 评估闭环
+### 4. 把失败任务留下来
+
+当前评估器会检查：
+
+- 报告中的数字能否在证据账本中找到；
+- 核心章节是否完整；
+- 证据来源是否足够；
+- Skills 是否成功执行；
+- 是否出现目标价、保证收益等禁止性表述。
+
+未通过检查的任务会自动生成 Bad Case，而不是只在日志里报错。
 
 ```mermaid
 flowchart LR
-    Report["Agent Report"] --> Eval["自动评估"]
-    Eval --> Metrics["准确率 / 命中率 / 引用覆盖 / 幻觉率"]
-    Metrics --> Gate{"通过门禁?"}
-    Gate -->|是| Archive["报告与 Wiki 归档"]
-    Gate -->|否| BadCase["自动生成 Bad Case"]
-    BadCase --> Regression["回归用例"]
-    Regression --> Prompt["Prompt / 检索 / 工具策略优化"]
-    Prompt --> Report
+    Failed["失败任务"] --> Case["Eval Case"]
+    Case --> Fix["规则 / Prompt / 检索调整"]
+    Fix --> Test["回归测试"]
+    Test --> Runtime["重新进入工作流"]
 ```
 
-当前评估为确定性规则评估：抽取报告数字并与证据账本匹配，检查证据来源数量、工具执行状态、必要章节和禁止性表述。指标来自每次真实任务执行，不在 README 中展示虚构百分比。
+## Skills 与数据工具
 
-## 产品界面
-
-| 个股研究驾驶舱 | Wiki 与长期记忆 |
+| Skill | 用途 |
 | --- | --- |
-| ![个股研究驾驶舱](ui-reference/images/02_stock_cockpit.png) | ![Wiki 与长期记忆](ui-reference/images/06_wiki_memory.png) |
+| `valuation_range_analysis` | 计算 PE/PB 历史分位 |
+| `three_statement_analysis` | 检查利润、资产和现金流之间的关系 |
+| `dupont_analysis` | 拆解 ROE 变化来源 |
+| `cashflow_quality_analysis` | 计算经营现金流与利润匹配程度 |
+| `business_segment_analysis` | 分析业务结构 |
+| `risk_red_flags_analysis` | 提取财务和经营风险 |
+| `investment_thesis_check` | 检查事实是否支持原研究假设 |
 
-| Skills / MCP / Eval | Agent 评估中心 |
-| --- | --- |
-| ![Skills 与工具监测](ui-reference/images/04_skills_mcp_eval.png) | ![Agent 评估中心](ui-reference/images/07_agent_eval.png) |
+每次调用都会记录工具名、输入摘要、结构化输出、执行状态和耗时。数据访问层采用 Provider 接口，便于替换 AkShare、Tushare、巨潮资讯或测试数据源。
 
 ## 技术栈
 
-| 层级 | 技术 |
+| 模块 | 技术 |
 | --- | --- |
-| Agent Runtime | LangGraph、TypedDict State、结构化节点契约 |
-| Backend | Python 3.12、FastAPI、SQLAlchemy、Pydantic |
-| Async Jobs | Celery、Redis、SSE 任务进度 |
-| Data / RAG | PostgreSQL、pgvector、BM25、重排与片段压缩 |
-| Frontend | Vue 3、TypeScript、Pinia、ECharts、Lucide Icons |
-| Infrastructure | Docker Compose、Alembic |
+| Agent 编排 | LangGraph、TypedDict State |
+| 后端 | Python 3.12、FastAPI、SQLAlchemy、Pydantic |
+| 异步任务 | Celery、Redis |
+| 数据与检索 | PostgreSQL、pgvector、BM25 |
+| 前端 | Vue 3、TypeScript、Pinia、ECharts |
+| 部署 | Docker Compose、Alembic |
 
 ## 项目结构
 
 ```text
 backend/app/
-├── agent/
-│   ├── graph.py                 # LangGraph 主控-执行工作流
-│   ├── state.py                 # 全局结构化 State 与节点清单
-│   └── context_engineering.py   # 上下文组装、重排、压缩、Token 估算
-├── skills/                      # 可注册财务分析 Skills
-├── services/
-│   ├── evals/quality.py         # 报告质量评估与失败原因
-│   ├── rag/                     # 混合检索适配层
-│   └── llm.py                   # OpenAI-compatible 模型调用
-├── providers/                   # 金融数据 Provider
-├── models/                      # 任务、报告、Wiki、Memory、Eval 模型
-├── api/v1/                      # REST API 与 SSE
-└── workers/                     # Celery Agent / Eval 任务
+├── agent/                 # LangGraph、State、Context Engineering
+├── skills/                # 财务分析 Skills
+├── providers/             # 金融数据 Provider
+├── services/evals/        # 报告质量评估
+├── services/rag/          # 检索与重排
+├── models/                # Task、Report、Evidence、Wiki、Eval
+├── api/v1/                # REST API 与任务进度接口
+└── workers/               # Celery 任务
+
 frontend/src/
-├── views/                       # 投研驾驶舱、Wiki、评估中心
-├── stores/                      # Pinia 状态管理
-└── components/                  # 图表、表格与 Agent 状态组件
+├── views/                 # Mission Control、个股研究、能力中心
+├── components/dashboard/  # 工作流、证据、工具日志、记忆组件
+├── stores/                # Pinia 状态管理
+└── api/                   # 前端 API 封装
 ```
+
+更详细的技术设计见 [Agent 技术方案](docs/agent-technical-solution.md)。
 
 ## Docker 启动
 
-1. 创建环境配置：
-
 ```bash
 cp .env.example .env
-```
-
-2. 在 `.env` 中配置 OpenAI-compatible 模型服务和需要的数据源密钥。
-
-3. 启动完整服务：
-
-```bash
 docker compose up -d --build
-```
-
-4. 初始化演示数据：
-
-```bash
 docker compose exec backend python -m app.seed.seed_demo_data
 ```
 
-5. 访问服务：
+访问地址：
 
-- Web 工作台：<http://localhost:5173>
-- OpenAPI 文档：<http://localhost:8000/docs>
-- 健康检查：<http://localhost:8000/health>
+- Web：<http://localhost:5173>
+- OpenAPI：<http://localhost:8000/docs>
+- Health：<http://localhost:8000/health>
 
-## 测试
+运行测试：
 
 ```bash
 docker compose exec backend pytest -q
+docker compose exec frontend npm run build
 ```
 
-核心测试覆盖 Context Pack 契约、RAG 重排压缩、财务 Skill 和评估 Bad Case 判定。端到端验证脚本位于 `backend/app/tests/verify_agent_flow.py`。
+## 面试时可以展开的设计点
+
+- 为什么使用 LangGraph State，而不是把流程写成一个超长函数；
+- 如何限制节点上下文，避免完整文档在链路中反复传递；
+- 证据片段如何重排、压缩并与报告结论关联；
+- 财务计算为什么放在确定性 Skill 中，而不是交给模型心算；
+- Wiki 为什么采用增量版本，而不是覆盖最新结论；
+- Bad Case 如何从线上任务转成可重复执行的回归用例；
+- 异步任务、工具日志和节点状态如何支撑问题排查。
+
+## 当前边界
+
+这个项目仍有一些明确的工程边界：
+
+- 当前重排器以确定性规则和 BM25 为主，尚未接入 Cross-Encoder；
+- Eval 主要检查数字、章节和引用覆盖，不等同于完整的投研质量判断；
+- LangGraph 暂未配置持久化 Checkpointer，节点级恢复仍需完善；
+- 不同金融数据源存在口径差异，报告仍需结合公告原文复核；
+- 当前系统只做研究辅助，不输出交易建议、目标价或收益承诺。
+
+这些边界会直接影响下一步优化顺序，而不是用更多 Prompt 掩盖。
 
 ## 简历描述
 
-**A 股投研 Multi-Agent 平台｜LangGraph / FastAPI / RAG / PostgreSQL / Vue 3**
+**A 股基本面研究 Agent 平台｜LangGraph / FastAPI / PostgreSQL / Vue 3**
 
-- 基于 LangGraph 设计“主控-执行”多智能体架构，将投研任务拆解为数据清洗、财务计算、逻辑推理与报告撰写节点，通过 Typed State 管理全局上下文、节点进度与结构化产物。
-- 设计 Context Engineering 机制，将上下文拆分为“最近原文 + 滚动摘要 + 关键决策”，结合证据重排、片段压缩与 Token 估算，减少节点间冗余信息传递和长文本注意力衰减。
-- 构建 Wiki 动态知识库，Agent 自动提取关键财务指标变化、风险点、结论与置信度并增量写回，形成可版本化、可检索的长期研究记忆。
-- 封装财务分析与金融数据工具，通过 Function Calling 记录完整调用链；建立数据准确率、引用覆盖率、幻觉率等评估指标，并将失败任务自动回流为 Bad Case。
-
-## Roadmap
-
-- 接入 Cross-Encoder / LLM Reranker，替换当前确定性重排器
-- 增加 LangGraph Checkpointer，实现节点级暂停、恢复与人工审批
-- 将 Eval Worker 从队列占位实现扩展为批量回归执行器
-- 增加 Wiki 结论冲突检测和时间衰减策略
-- 接入 OpenTelemetry，统一 Agent Trace、模型调用和工具调用观测
+- 基于 LangGraph 实现主控与专业执行节点，将研究任务拆为数据清洗、证据检索、财务计算、逻辑推理、报告生成和知识写回，并通过结构化 State 管理节点产物和任务进度。
+- 将上下文拆分为最近原文、滚动摘要和关键决策，结合证据重排与片段压缩，减少节点间重复传递的内容。
+- 封装估值、三张表、现金流和风险识别 Skills，记录工具输入、输出、耗时和执行状态，使财务计算过程可复核。
+- 建立报告数字匹配、引用覆盖和禁止性表述检查，将失败任务自动沉淀为 Eval Case；将通过评估的指标变化、风险和结论增量写回 Wiki。
 
 ## License
 

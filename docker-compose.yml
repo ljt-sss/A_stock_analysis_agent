@@ -7,6 +7,8 @@ services:
       VITE_API_BASE: http://localhost:8000/api/v1
     volumes:
       - ./frontend/src:/app/src
+      - ./frontend/index.html:/app/index.html:ro
+      - ./frontend/public:/app/public:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -82,4 +84,3 @@ services:
 
 volumes:
   postgres_data:
-
