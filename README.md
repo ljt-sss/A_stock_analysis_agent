@@ -322,17 +322,6 @@ docker compose exec backend pytest backend/app/tests/verify_agent_flow.py -q
 - `completeness`：报告必需章节完整度；
 - `task_recovery_rate`：失败任务恢复能力。
 
-## 面试 / 展示亮点
-
-- **Financial Agent Harness**：把金融 Agent 设计成“执行环 + 评估环”的可回归系统，而不是一次性 Prompt。
-- **结构化多 Agent State**：每个节点的输入、输出、证据、工具、错误、Token 和耗时可追踪。
-- **金融 RAG 证据治理**：SQL 精确事实、文档 RAG、Wiki 记忆分层，证据带来源、时间、实体和指标元数据。
-- **Reflection Memory**：把工具误调用、指标口径错误、引用缺失等历史失败转成下一次任务的反思提醒。
-- **MCP / Skill 纠错**：Schema 校验、错误回传、重新规划、降级调用和有限重试，降低长任务单点失败。
-- **Rules + Hooks 风险控制**：事实校验、口径检查、引用检查和合规拦截前置到高风险节点。
-- **Eval Harness 闭环优化**：失败样例沉淀为 Eval Case，支持策略修复后的回归评估。
-- **可视化观测看板**：按任务、节点和工具维度追踪 Token、耗时、重试、失败原因和输出质量。
-
 ## 当前边界
 
 - 当前重排器以确定性规则和 BM25 为主，尚未接入 Cross-Encoder。
@@ -340,15 +329,6 @@ docker compose exec backend pytest backend/app/tests/verify_agent_flow.py -q
 - LangGraph 持久化 Checkpointer 与节点级恢复仍在技术方案阶段。
 - 真实数据源可能存在口径差异，报告仍需结合公告原文复核。
 - 系统只做研究辅助，不输出交易建议、目标价或收益承诺。
-
-## 简历描述
-
-**金融 RAG 知识库与多 Agent 投研分析平台｜LangGraph / RAG / Eval Harness / MCP / FastAPI / Vue3**
-
-- 设计 Financial Agent Harness 双环架构，将基本面研究拆解为任务规划、数据检查、RAG 检索、财务 Skill、公告新闻归因、风险识别、报告生成、事实校验和 Wiki 写回，并通过 Eval Harness 做回归评估。
-- 基于 LangGraph 构建主控 Agent 与专业 Agent 协作流程，使用结构化 State 记录节点输入输出、证据来源、工具返回、失败原因、Token 消耗和耗时，支撑长任务追踪、重试和复盘。
-- 构建金融实体标签与 RAG 证据体系，围绕公司、行业、指标、事件、新闻、风险和研究结论沉淀知识资产，检索结果保留来源、时间、公司、指标和事件类型等元数据。
-- 设计 Reflection Memory、MCP / Skill 纠错、Rules + Hooks 和 Eval Case 回归机制，降低工具误调用、上下文膨胀、证据遗漏和幻觉输出风险。
 
 ## License
 
