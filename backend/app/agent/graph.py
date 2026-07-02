@@ -11,7 +11,7 @@ from app.agent.context_engineering import build_context_pack, estimate_context_s
 from app.agent.state import AGENT_NODES, FundamentalAnalysisState
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.models.agent import AgentStep, AgentTask, ToolCallLog
+from app.models.agent import AgentCheckpoint, AgentStep, AgentTask, ToolCallLog
 from app.models.eval import EvalCase, EvalResult
 from app.models.memory import AgentMemory
 from app.models.report import AnalysisEvidence, AnalysisReport
@@ -53,6 +53,63 @@ def _finish_step(task_id: str, name: str, output: dict) -> None:
         db.close()
 
 
+def _json_safe(value):
+    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
+
+
+def _save_checkpoint(task_id: str, name: str, state: FundamentalAnalysisState, patch: dict, output: dict) -> None:
+    db = SessionLocal()
+    try:
+        merged_state = {**state, **patch}
+        checkpoint = AgentCheckpoint(
+            task_id=UUID(task_id),
+            step_name=name,
+            step_order=NODES.index(name) + 1,
+            state=_json_safe(merged_state),
+            output=_json_safe(output),
+            status="success",
+        )
+        db.add(checkpoint)
+        db.commit()
+    finally:
+        db.close()
+
+
+def _finish_with_checkpoint(task_id: str, name: str, state: FundamentalAnalysisState, patch: dict, output: dict) -> dict:
+    _finish_step(task_id, name, output)
+    _save_checkpoint(task_id, name, state, patch, output)
+    return patch
+
+
+def _load_latest_checkpoint(task_id: str) -> AgentCheckpoint | None:
+    db = SessionLocal()
+    try:
+        return db.scalar(
+            select(AgentCheckpoint)
+            .where(AgentCheckpoint.task_id == UUID(task_id), AgentCheckpoint.status == "success")
+            .order_by(AgentCheckpoint.step_order.desc(), AgentCheckpoint.created_at.desc())
+        )
+    finally:
+        db.close()
+
+
+def _resume_state(task_id: str, ts_code: str, report_period: str | None, user_question: str | None) -> tuple[FundamentalAnalysisState, str]:
+    checkpoint = _load_latest_checkpoint(task_id)
+    base_state: FundamentalAnalysisState = {
+        "task_id": task_id,
+        "ts_code": ts_code,
+        "report_period": report_period,
+        "user_question": user_question,
+        "errors": [],
+    }
+    if not checkpoint:
+        return base_state, NODES[0]
+    if checkpoint.step_order >= len(NODES):
+        return checkpoint.state, NODES[-1]
+    state = {**checkpoint.state, "task_id": task_id, "ts_code": ts_code, "report_period": report_period, "user_question": user_question}
+    return state, NODES[checkpoint.step_order]
+
+
 async def master_orchestrator(state: FundamentalAnalysisState) -> dict:
     name = "master_orchestrator"
     _start_step(state["task_id"], name)
@@ -63,8 +120,7 @@ async def master_orchestrator(state: FundamentalAnalysisState) -> dict:
         "quality_gates": ["evidence_verification", "report_evaluation", "wiki_confidence_gate"],
         "state_contract": "structured-only",
     }
-    _finish_step(state["task_id"], name, plan)
-    return {"master_plan": plan, "retry_count": 0}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"master_plan": plan, "retry_count": 0}, plan)
 
 
 async def load_context(state: FundamentalAnalysisState) -> dict:
@@ -79,12 +135,12 @@ async def load_context(state: FundamentalAnalysisState) -> dict:
         "context_sections": ["recent_raw", "rolling_summary", "key_decisions"],
         **token_metrics,
     }
-    _finish_step(state["task_id"], name, output)
-    return {
+    patch = {
         "stock_context": data,
         "context_pack": {**context_pack, "token_metrics": token_metrics},
         "financial_data": {"quarterly": data.get("quarterly_financials", [])},
     }
+    return _finish_with_checkpoint(state["task_id"], name, state, patch, output)
 
 
 async def data_cleaning_agent(state: FundamentalAnalysisState) -> dict:
@@ -102,8 +158,7 @@ async def data_cleaning_agent(state: FundamentalAnalysisState) -> dict:
         "wiki": "ready",
     }
     output = {"input_rows": len(rows), "clean_rows": len(cleaned), "duplicates_removed": len(rows) - len(cleaned), "missing": missing}
-    _finish_step(state["task_id"], name, output)
-    return {"cleaned_data": {"quarterly": cleaned, "quality": output}, "data_freshness": freshness}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"cleaned_data": {"quarterly": cleaned, "quality": output}, "data_freshness": freshness}, output)
 
 
 async def retrieve_evidence(state: FundamentalAnalysisState) -> dict:
@@ -125,8 +180,7 @@ async def retrieve_evidence(state: FundamentalAnalysisState) -> dict:
     output = {
         "candidates": len(candidates), "selected": len(compressed), "compression": "rerank+snippet", "sources": context.get("meta", {}).get("sources", []),
     }
-    _finish_step(state["task_id"], name, output)
-    return {"retrieved_evidence": candidates, "compressed_evidence": compressed}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"retrieved_evidence": candidates, "compressed_evidence": compressed}, output)
 
 
 async def financial_calculation_agent(state: FundamentalAnalysisState) -> dict:
@@ -149,8 +203,8 @@ async def financial_calculation_agent(state: FundamentalAnalysisState) -> dict:
         db.commit()
     finally:
         db.close()
-    _finish_step(state["task_id"], name, {"skills": skill_names, "success": sum(item["status"] == "success" for item in results)})
-    return {"skill_results": results}
+    output = {"skills": skill_names, "success": sum(item["status"] == "success" for item in results)}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"skill_results": results}, output)
 
 
 async def reasoning_agent(state: FundamentalAnalysisState) -> dict:
@@ -166,8 +220,8 @@ async def reasoning_agent(state: FundamentalAnalysisState) -> dict:
         "counter_evidence": risks[:2],
         "confidence": round(min(0.95, 0.55 + len(state["compressed_evidence"]) * 0.05), 2),
     }
-    _finish_step(state["task_id"], name, {"conclusions": len(reasoning["thesis"]), "risks": len(risks), "confidence": reasoning["confidence"]})
-    return {"reasoning_result": reasoning}
+    output = {"conclusions": len(reasoning["thesis"]), "risks": len(risks), "confidence": reasoning["confidence"]}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"reasoning_result": reasoning}, output)
 
 
 async def report_writer_agent(state: FundamentalAnalysisState) -> dict:
@@ -186,8 +240,8 @@ async def report_writer_agent(state: FundamentalAnalysisState) -> dict:
     )
     user_prompt = f"为 {stock['name']}（{stock['ts_code']}）撰写可核验报告。\n{json.dumps(prompt_context, ensure_ascii=False, default=str)}"
     report = await generate_text(system_prompt, user_prompt)
-    _finish_step(state["task_id"], name, {"characters": len(report), "estimated_prompt_tokens": len(user_prompt) // 4, "model": settings.openai_compat_default_model})
-    return {"draft_report": report}
+    output = {"characters": len(report), "estimated_prompt_tokens": len(user_prompt) // 4, "model": settings.openai_compat_default_model}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"draft_report": report}, output)
 
 
 async def verify_evidence(state: FundamentalAnalysisState) -> dict:
@@ -195,8 +249,7 @@ async def verify_evidence(state: FundamentalAnalysisState) -> dict:
     _start_step(state["task_id"], name)
     forbidden = [phrase for phrase in FORBIDDEN_CLAIMS if phrase in state["draft_report"]]
     output = {"evidence_sources": len(state["compressed_evidence"]), "forbidden_phrases": forbidden, "status": "passed" if not forbidden else "review"}
-    _finish_step(state["task_id"], name, output)
-    return {"verified_report": state["draft_report"]}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"verified_report": state["draft_report"]}, output)
 
 
 async def evaluate_output(state: FundamentalAnalysisState) -> dict:
@@ -220,8 +273,7 @@ async def evaluate_output(state: FundamentalAnalysisState) -> dict:
         db.commit()
     finally:
         db.close()
-    _finish_step(state["task_id"], name, metrics)
-    return {"eval_result": metrics}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"eval_result": metrics}, metrics)
 
 
 async def update_memory(state: FundamentalAnalysisState) -> dict:
@@ -266,19 +318,36 @@ async def update_memory(state: FundamentalAnalysisState) -> dict:
     finally:
         db.close()
     output = {"memory_type": "research_delta", "title": title, "wiki_slug": slug, "delta": delta}
-    _finish_step(state["task_id"], name, output)
-    return {"wiki_delta": [delta], "memory_updates": [output]}
+    return _finish_with_checkpoint(state["task_id"], name, state, {"wiki_delta": [delta], "memory_updates": [output]}, output)
 
 
-def build_graph():
+def build_graph(start_node: str | None = None):
     graph = StateGraph(FundamentalAnalysisState)
-    functions = [master_orchestrator, load_context, data_cleaning_agent, retrieve_evidence, financial_calculation_agent, reasoning_agent, report_writer_agent, verify_evidence, evaluate_output, update_memory]
-    for function in functions:
+    functions = {
+        function.__name__: function
+        for function in [
+            master_orchestrator,
+            load_context,
+            data_cleaning_agent,
+            retrieve_evidence,
+            financial_calculation_agent,
+            reasoning_agent,
+            report_writer_agent,
+            verify_evidence,
+            evaluate_output,
+            update_memory,
+        ]
+    }
+    start = start_node or NODES[0]
+    start_index = NODES.index(start)
+    active_nodes = NODES[start_index:]
+    for name in active_nodes:
+        function = functions[name]
         graph.add_node(function.__name__, function)
-    graph.add_edge(START, NODES[0])
-    for left, right in zip(NODES, NODES[1:]):
+    graph.add_edge(START, active_nodes[0])
+    for left, right in zip(active_nodes, active_nodes[1:]):
         graph.add_edge(left, right)
-    graph.add_edge(NODES[-1], END)
+    graph.add_edge(active_nodes[-1], END)
     return graph.compile()
 
 
@@ -286,4 +355,9 @@ fundamental_graph = build_graph()
 
 
 async def run_fundamental_graph(task_id: str, ts_code: str, report_period: str | None = None, user_question: str | None = None):
-    return await fundamental_graph.ainvoke({"task_id": task_id, "ts_code": ts_code, "report_period": report_period, "user_question": user_question, "errors": []})
+    state, start_node = _resume_state(task_id, ts_code, report_period, user_question)
+    latest = _load_latest_checkpoint(task_id)
+    if latest and latest.step_order >= len(NODES):
+        return state
+    graph = fundamental_graph if start_node == NODES[0] else build_graph(start_node)
+    return await graph.ainvoke(state)

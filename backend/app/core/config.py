@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     openai_compat_api_key: str = ""
     openai_compat_default_model: str = "deepseek-chat"
     llm_timeout_seconds: float = 90.0
+    reranker_provider: str = "lexical"
+    cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()

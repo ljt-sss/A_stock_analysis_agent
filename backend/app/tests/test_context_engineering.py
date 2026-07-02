@@ -1,4 +1,6 @@
+import app.agent.context_engineering as context_engineering
 from app.agent.context_engineering import build_context_pack, estimate_context_savings, rerank_and_compress
+from app.core.config import settings
 from app.services.evals.quality import evaluate_report
 
 
@@ -25,6 +27,23 @@ def test_reranker_prefers_financial_evidence_and_compresses():
     ranked = rerank_and_compress("财务估值风险 PE", items, top_k=2, max_chars=80)
     assert ranked[0]["source_type"] == "financial"
     assert len(ranked[1]["content"]) <= 83
+
+
+def test_cross_encoder_reranker_falls_back_to_lexical(monkeypatch):
+    def fail_to_load(_model_name):
+        raise RuntimeError("model unavailable")
+
+    monkeypatch.setattr(settings, "reranker_provider", "cross_encoder")
+    monkeypatch.setattr(context_engineering, "_load_cross_encoder", fail_to_load)
+    items = [
+        {"source_type": "news", "title": "一般新闻", "content": "行业信息", "score": 0.2},
+        {"source_type": "financial", "title": "财务估值风险", "content": "PE 12.5，营收增长", "score": 0.5},
+    ]
+    ranked = rerank_and_compress("财务估值风险 PE", items, top_k=2, max_chars=80)
+    assert ranked[0]["source_type"] == "financial"
+    assert ranked[0]["reranker"] == "lexical"
+    assert ranked[0]["reranker_error"].startswith("cross_encoder_fallback")
+    monkeypatch.setattr(settings, "reranker_provider", "lexical")
 
 
 def test_eval_creates_failure_reason_for_unsupported_numbers():

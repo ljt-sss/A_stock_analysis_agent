@@ -324,9 +324,9 @@ docker compose exec backend pytest backend/app/tests/verify_agent_flow.py -q
 
 ## 当前边界
 
-- 当前重排器以确定性规则和 BM25 为主，尚未接入 Cross-Encoder。
 - Eval 已覆盖数字、章节、引用和禁用表达，但不等同于完整投研质量判断。
-- LangGraph 持久化 Checkpointer 与节点级恢复仍在技术方案阶段。
+- Cross-Encoder 重排已支持配置开启，默认仍使用本地 lexical/BM25 回退，避免无模型环境影响启动。
+- LangGraph 节点级 checkpoint 已落库，任务可通过 retry 从最新成功节点后继续执行。
 - 真实数据源可能存在口径差异，报告仍需结合公告原文复核。
 - 系统只做研究辅助，不输出交易建议、目标价或收益承诺。
 

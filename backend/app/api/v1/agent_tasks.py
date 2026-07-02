@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.agent.state import AGENT_NODES
-from app.models.agent import AgentStep, AgentTask, ToolCallLog
+from app.models.agent import AgentCheckpoint, AgentStep, AgentTask, ToolCallLog
 from app.schemas.stock import FundamentalTaskCreate
 from app.services.stocks.real_data import RealDataError, normalize_ts_code
 from app.workers.tasks_agent import generate_fundamental_analysis
@@ -106,6 +106,53 @@ def tool_calls(task_id: UUID, db: Session = Depends(get_db)):
             for x in db.scalars(select(ToolCallLog).where(ToolCallLog.task_id == task_id).order_by(ToolCallLog.created_at)).all()
         ]
     )
+
+
+@router.get("/{task_id}/checkpoints")
+def checkpoints(task_id: UUID, db: Session = Depends(get_db)):
+    return jsonable_encoder(
+        [
+            {
+                "id": str(x.id),
+                "task_id": str(x.task_id),
+                "step_name": x.step_name,
+                "step_order": x.step_order,
+                "status": x.status,
+                "output": x.output,
+                "created_at": x.created_at,
+            }
+            for x in db.scalars(
+                select(AgentCheckpoint).where(AgentCheckpoint.task_id == task_id).order_by(AgentCheckpoint.step_order, AgentCheckpoint.created_at)
+            ).all()
+        ]
+    )
+
+
+@router.post("/{task_id}/retry")
+def retry_task(task_id: UUID, db: Session = Depends(get_db)):
+    task = db.get(AgentTask, task_id)
+    if not task:
+        raise HTTPException(404, "Task not found")
+    latest = db.scalar(
+        select(AgentCheckpoint)
+        .where(AgentCheckpoint.task_id == task_id, AgentCheckpoint.status == "success")
+        .order_by(AgentCheckpoint.step_order.desc(), AgentCheckpoint.created_at.desc())
+    )
+    resume_order = latest.step_order if latest else 0
+    for step in db.scalars(select(AgentStep).where(AgentStep.task_id == task_id, AgentStep.step_order > resume_order)).all():
+        step.status = "pending"
+        step.error_message = None
+        step.started_at = None
+        step.finished_at = None
+    task.status = "pending"
+    task.current_step = NODES[resume_order] if resume_order < len(NODES) else "completed"
+    task.progress = resume_order / len(NODES) * 100
+    task.error_message = None
+    task.retry_count = (task.retry_count or 0) + 1
+    db.commit()
+    if resume_order < len(NODES):
+        generate_fundamental_analysis.delay(str(task.id), task.ts_code, task.input.get("report_period"))
+    return jsonable_encoder(task_dict(task))
 
 
 @router.get("/{task_id}/stream")

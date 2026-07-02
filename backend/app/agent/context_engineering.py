@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import re
+from functools import lru_cache
 from typing import Any
+
+from app.core.config import settings
 
 
 def _compact(value: Any, limit: int = 1200) -> str:
@@ -46,6 +49,7 @@ def rerank_and_compress(
     max_chars: int = 700,
 ) -> list[dict[str, Any]]:
     terms = {term.lower() for term in re.findall(r"[A-Za-z0-9_.%]+|[\u4e00-\u9fff]{2,}", query)}
+    cross_encoder_scores, reranker_error = _cross_encoder_scores(query, evidence)
     ranked = []
     for index, item in enumerate(evidence):
         searchable = f"{item.get('title', '')} {item.get('content', '')}".lower()
@@ -53,18 +57,59 @@ def rerank_and_compress(
         source_weight = {"financial": 1.0, "market": 0.9, "report_chunk": 0.8, "wiki": 0.7, "news": 0.6}.get(
             item.get("source_type"), 0.5
         )
-        score = round(float(item.get("score", 0)) + lexical * 0.15 + source_weight, 4)
+        lexical_score = float(item.get("score", 0)) + lexical * 0.15 + source_weight
+        semantic_score = cross_encoder_scores[index] if cross_encoder_scores else None
+        score = lexical_score + (semantic_score * 2.0 if semantic_score is not None else 0)
         content = str(item.get("content", "")).strip()
         ranked.append(
             {
                 **item,
                 "content": content if len(content) <= max_chars else f"{content[:max_chars]}...",
-                "rerank_score": score,
+                "rerank_score": round(score, 4),
+                "lexical_score": round(lexical_score, 4),
+                "semantic_score": round(semantic_score, 4) if semantic_score is not None else None,
+                "reranker": "cross_encoder" if semantic_score is not None else "lexical",
+                "reranker_error": reranker_error,
                 "original_index": index,
             }
         )
     ranked.sort(key=lambda item: item["rerank_score"], reverse=True)
     return ranked[:top_k]
+
+
+def _cross_encoder_scores(query: str, evidence: list[dict[str, Any]]) -> tuple[list[float] | None, str | None]:
+    if settings.reranker_provider.lower() != "cross_encoder" or not evidence:
+        return None, None
+    try:
+        model = _load_cross_encoder(settings.cross_encoder_model)
+        pairs = [
+            (
+                query,
+                f"{item.get('title', '')}\n{str(item.get('content', ''))[:1200]}",
+            )
+            for item in evidence
+        ]
+        raw_scores = [float(score) for score in model.predict(pairs)]
+        return _minmax(raw_scores), None
+    except Exception as exc:  # pragma: no cover - depends on optional model runtime.
+        return None, f"cross_encoder_fallback:{type(exc).__name__}"
+
+
+@lru_cache(maxsize=2)
+def _load_cross_encoder(model_name: str):
+    from sentence_transformers import CrossEncoder
+
+    return CrossEncoder(model_name)
+
+
+def _minmax(values: list[float]) -> list[float]:
+    if not values:
+        return []
+    low = min(values)
+    high = max(values)
+    if high == low:
+        return [1.0 for _ in values]
+    return [(value - low) / (high - low) for value in values]
 
 
 def estimate_context_savings(raw_payload: Any, context_pack: dict[str, Any]) -> dict[str, int | float]:
